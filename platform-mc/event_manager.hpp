@@ -6,6 +6,7 @@
 #include "common/types.hpp"
 #include "numeric_sensor.hpp"
 #include "pldmd/dbus_impl_requester.hpp"
+#include "requester/configuration_discovery_handler.hpp"
 #include "requester/handler.hpp"
 #include "terminus.hpp"
 #include "terminus_manager.hpp"
@@ -39,9 +40,11 @@ class EventManager
     EventManager& operator=(EventManager&&) = delete;
     virtual ~EventManager() = default;
 
-    explicit EventManager(TerminusManager& terminusManager,
-                          TerminiMapper& termini) :
-        terminusManager(terminusManager), termini(termini)
+    explicit EventManager(
+        TerminusManager& terminusManager, TerminiMapper& termini,
+        pldm::ConfigurationDiscoveryHandler* configurationDiscovery = nullptr) :
+        terminusManager(terminusManager), termini(termini),
+        configurationDiscovery(configurationDiscovery)
     {
         // Default response handler for PollForPlatFormEventMessage
         registerPolledEventHandler(
@@ -185,6 +188,10 @@ class EventManager
         uint8_t& eventClass, uint32_t& eventDataSize, uint8_t*& eventData,
         uint32_t& eventDataIntegrityChecksum);
 
+    bool checkMetaIana(
+        pldm_tid_t tid,
+        const std::map<std::string, MctpEndpoint>& configurations);
+
     /** @brief Reference of terminusManager */
     TerminusManager& terminusManager;
 
@@ -196,6 +203,8 @@ class EventManager
 
     /** @brief map of PLDM event type of polled event to EventHandlers */
     pldm::platform_mc::EventMap eventHandlers;
+
+    pldm::ConfigurationDiscoveryHandler* configurationDiscovery;
 };
 } // namespace platform_mc
 } // namespace pldm

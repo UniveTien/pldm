@@ -21,7 +21,7 @@ class FileIOHandler : public CmdHandler
         configurationDescovery(configurationDescovery)
     {
         handlers.emplace(
-            PLDM_OEM_META_FILEIO_CMD_WRITE_FILE,
+            PLDM_OEM_META_FILE_IO_CMD_WRITE_FILE,
             [this](pldm_tid_t tid, const pldm_msg* request,
                    size_t payloadLength) {
                 return this->writeFileIO(tid, request, payloadLength);
