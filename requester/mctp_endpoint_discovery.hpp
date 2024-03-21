@@ -18,6 +18,8 @@ const std::string emptyUUID = "00000000-0000-0000-0000-000000000000";
 constexpr const char* MCTPService = "xyz.openbmc_project.MCTP";
 constexpr const char* MCTPInterface = "xyz.openbmc_project.MCTP.Endpoint";
 constexpr const char* MCTPPath = "/xyz/openbmc_project/mctp";
+constexpr const char* AssociationInterface =
+    "xyz.openbmc_project.Association.Definitions";
 
 /** @class MctpDiscoveryHandlerIntf
  *

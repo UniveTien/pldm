@@ -34,15 +34,21 @@ class InventoryManager
      *  @param[in] instanceIdDb - Managing instance ID for PLDM requests
      *  @param[out] descriptorMap - Populate the firmware identifiers for the
      *                              FDs managed by the BMC.
+     *  @param[out] downstreamDescriptorMap - Populate the downstream
+     *                                        identifiers for the FDs managed
+     *                                        by the BMC.
      *  @param[out] componentInfoMap - Populate the component info for the FDs
      *                                 managed by the BMC.
      */
     explicit InventoryManager(
         pldm::requester::Handler<pldm::requester::Request>& handler,
         InstanceIdDb& instanceIdDb, DescriptorMap& descriptorMap,
+        DownstreamDescriptorMap& downstreamDescriptorMap,
         ComponentInfoMap& componentInfoMap) :
-        handler(handler), instanceIdDb(instanceIdDb),
-        descriptorMap(descriptorMap), componentInfoMap(componentInfoMap)
+        handler(handler),
+        instanceIdDb(instanceIdDb), descriptorMap(descriptorMap),
+        downstreamDescriptorMap(downstreamDescriptorMap),
+        componentInfoMap(componentInfoMap)
     {}
 
     /** @brief Discover the firmware identifiers and component details of FDs
@@ -67,6 +73,24 @@ class InventoryManager
      */
     void queryDeviceIdentifiers(mctp_eid_t eid, const pldm_msg* response,
                                 size_t respMsgLen);
+ 
+    /** @brief Handler for QueryDownstreamDevices command response
+     *
+     *  @param[in] eid - Remote MCTP endpoint
+     *  @param[in] response - PLDM response message
+     *  @param[in] respMsgLen - Response message length
+     */
+    void queryDownstreamDevices(mctp_eid_t eid, const pldm_msg* response,
+                                size_t respMsgLen);
+
+    /** @brief Handler for QueryDownstreamIdentifiers command response
+     *
+     *  @param[in] eid - Remote MCTP endpoint
+     *  @param[in] response - PLDM response message
+     *  @param[in] respMsgLen - Response message length
+     */
+    void queryDownstreamIdentifiers(mctp_eid_t eid, const pldm_msg* response,
+                                    size_t respMsgLen);
 
     /** @brief Handler for GetFirmwareParameters command response
      *
@@ -81,6 +105,29 @@ class InventoryManager
                                size_t respMsgLen);
 
   private:
+    /**
+     * @brief Sends QueryDeviceIdentifiers request
+     *
+     * @param[in] eid - Remote MCTP endpoint
+     */
+    void sendQueryDeviceIdentifiersRequest(mctp_eid_t eid);
+
+    /**
+     * @brief Sends QueryDownstreamDevices request
+     *
+     * @param[in] eid - Remote MCTP endpoint
+     */
+    void sendQueryDownstreamDevicesRequest(mctp_eid_t eid);
+
+    /**
+     * @brief Sends QueryDownstreamIdentifiers request
+     *
+     * @param[in] eid - Remote MCTP endpoint
+     */
+    void sendQueryDownstreamIdentifiersRequest(mctp_eid_t eid,
+                                               uint32_t dataTransferHandle,
+                                               enum transfer_op_flag transferOperationFlag);
+
     /** @brief Send GetFirmwareParameters command request
      *
      *  @param[in] eid - Remote MCTP endpoint
@@ -95,6 +142,9 @@ class InventoryManager
 
     /** @brief Device identifiers of the managed FDs */
     DescriptorMap& descriptorMap;
+ 
+    /** @brief Downstream Device identifiers of the managed FDs*/
+    DownstreamDescriptorMap& downstreamDescriptorMap;
 
     /** @brief Component information needed for the update of the managed FDs */
     ComponentInfoMap& componentInfoMap;

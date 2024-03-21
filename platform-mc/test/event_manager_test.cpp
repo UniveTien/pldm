@@ -167,7 +167,7 @@ TEST_F(EventManagerTest, processNumericSensorEventTest)
 TEST_F(EventManagerTest, SetEventReceiverTest)
 {
     // Add terminus
-    auto mappedTid = terminusManager.mapTid(pldm::MctpInfo(10, "", "", 1));
+    auto mappedTid = terminusManager.mapTid(pldm::MctpInfo(10, "", "", 1, ""));
     auto tid = mappedTid.value();
     termini[tid] = std::make_shared<pldm::platform_mc::Terminus>(
         tid, 1 << PLDM_BASE | 1 << PLDM_PLATFORM);
@@ -392,7 +392,7 @@ TEST_F(EventManagerTest, updateAvailableState)
 TEST_F(EventManagerTest, pollForPlatformEventTaskMultipartTransferTest)
 {
     // Add terminus
-    auto mappedTid = terminusManager.mapTid(pldm::MctpInfo(10, "", "", 1));
+    auto mappedTid = terminusManager.mapTid(pldm::MctpInfo(10, "", "", 1, ""));
     auto tid = mappedTid.value();
     termini[tid] = std::make_shared<pldm::platform_mc::Terminus>(
         tid, 1 << PLDM_BASE | 1 << PLDM_PLATFORM);

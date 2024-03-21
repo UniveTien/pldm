@@ -49,7 +49,7 @@ class TerminusManagerTest : public testing::Test
 
 TEST_F(TerminusManagerTest, mapTidTest)
 {
-    pldm::MctpInfo mctpInfo1(8, "", "", 0);
+    pldm::MctpInfo mctpInfo1(8, "", "", 0, "");
 
     auto mappedTid1 = terminusManager.mapTid(mctpInfo1);
     EXPECT_NE(mappedTid1, std::nullopt);
@@ -80,8 +80,8 @@ TEST_F(TerminusManagerTest, negativeMapTidTest)
     EXPECT_EQ(mappedTid, std::nullopt);
 
     // map EID to tid which has been assigned
-    pldm::MctpInfo m2(9, "", "", 1);
-    pldm::MctpInfo m3(10, "", "", 1);
+    pldm::MctpInfo m2(9, "", "", 1, "");
+    pldm::MctpInfo m3(10, "", "", 1, "");
     auto mappedTid2 = terminusManager.mapTid(m2);
     auto mappedTid3 = terminusManager.storeTerminusInfo(m3, mappedTid2.value());
     EXPECT_NE(mappedTid2, std::nullopt);
