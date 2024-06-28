@@ -1,5 +1,6 @@
 #include "oem_meta_file_io.hpp"
 
+#include "oem_meta_file_io_type_apml_alert.hpp"
 #include "oem_meta_file_io_type_bios_version.hpp"
 #include "oem_meta_file_io_type_event_log.hpp"
 #include "oem_meta_file_io_type_post_code.hpp"
@@ -29,6 +30,8 @@ std::unique_ptr<FileHandler>
             return std::make_unique<BIOSVersionHandler>(
                 messageTid, configurationDiscovery->getConfigurations(),
                 dBusIntf);
+        case APML_ALERT:
+            return std::make_unique<APMLAlertHandler>(messageTid, dBusIntf);
         case EVENT_LOG:
             return std::make_unique<EventLogHandler>(
                 messageTid, configurationDiscovery->getConfigurations());
