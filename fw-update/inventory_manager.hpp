@@ -91,6 +91,16 @@ class InventoryManager
      */
     void queryDownstreamIdentifiers(mctp_eid_t eid, const pldm_msg* response,
                                     size_t respMsgLen);
+ 
+    /** @brief Handler for GetDownstreamFirmwareParameters command response
+     *
+     *  @param[in] eid - Remote MCTP endpoint
+     *  @param[in] response - PLDM response message
+     *  @param[in] respMsgLen - Response message length
+     */
+    void getDownstreamFirmwareParameters(mctp_eid_t eid,
+                                         const pldm_msg* response,
+                                         size_t respMsgLen);
 
     /** @brief Handler for GetFirmwareParameters command response
      *
@@ -127,6 +137,16 @@ class InventoryManager
     void sendQueryDownstreamIdentifiersRequest(mctp_eid_t eid,
                                                uint32_t dataTransferHandle,
                                                enum transfer_op_flag transferOperationFlag);
+ 
+    /**
+     * @brief Sends QueryDownstreamFirmwareParameters request
+     *
+     * @param[in] eid - Remote MCTP endpoint
+     */
+    void sendGetDownstreamFirmwareParametersRequest(
+        mctp_eid_t eid, uint32_t dataTransferHandle,
+        enum transfer_op_flag transferOperationFlag);
+
 
     /** @brief Send GetFirmwareParameters command request
      *
