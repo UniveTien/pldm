@@ -1,6 +1,7 @@
 #include "oem_meta_file_io_type_event_log.hpp"
 
 #include <phosphor-logging/lg2.hpp>
+#include <sdbusplus/bus.hpp>
 
 #include <utility>
 
@@ -143,6 +144,11 @@ int EventLogHandler::write(const message& eventData)
         " PVDD11_S3",
     });
 
+    /* systemd service to kick start a target. */
+    constexpr auto SYSTEMD_SERVICE = "org.freedesktop.systemd1";
+    constexpr auto SYSTEMD_ROOT = "/org/freedesktop/systemd1";
+    constexpr auto SYSTEMD_INTERFACE = "org.freedesktop.systemd1.Manager";
+
     /* 1. Get host slot number */
     uint64_t slot;
 
@@ -205,6 +211,20 @@ int EventLogHandler::write(const message& eventData)
                      vr_source[eventData[2]] + " status: 0x" +
                      std::format("{:02x}", eventData[3]) +
                      std::format("{:02x}", eventData[4]);
+    }
+    else if ((strcmp(eventList[eventType], " Post-Completed") == 0))
+    {
+        /* The retimer is not available temporary after fw update.
+           We should update fw version on d-bus when post-complete. */
+        auto bus = sdbusplus::bus::new_default();
+        auto method = bus.new_method_call(SYSTEMD_SERVICE, SYSTEMD_ROOT,
+                                    SYSTEMD_INTERFACE, "StartUnit");
+        auto service = std::string("fw-versions-sd-retimer@") +
+                       std::to_string(slot) + ".service";
+        method.append(service, "replace");
+        bus.call_noreply(method);
+
+        event_name = eventList[eventType];
     }
     else
     {
