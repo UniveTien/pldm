@@ -17,6 +17,7 @@ void InventoryItemManager::createInventoryItem(
     const std::string& activeVersion,
     std::shared_ptr<UpdateManager> updateManager)
 {
+    const std::lock_guard<std::mutex> lock(recordOperator);
 	try
 	{
 		if (!inventoryPathMap.at(eid).empty())
@@ -29,14 +30,14 @@ void InventoryItemManager::createInventoryItem(
 			auto devicePath = boardPath + "_" + deviceName;
 			auto inventoryItem = std::make_unique<InventoryItemBoardIntf>(
 				utils::DBusHandler::getBus(), devicePath.c_str());
-			inventoryItems.emplace_back(std::move(inventoryItem));
+			inventoryItemPairs.emplace_back(std::make_pair(eid, std::move(inventoryItem)));
 
 			const auto softwarePath = "/xyz/openbmc_project/software/" +
 									  devicePath.substr(devicePath.rfind("/") + 1) +
 									  "_" + getVersionId(activeVersion);
 
-			createVersion(softwarePath, activeVersion, VersionPurpose::Other);
-			createAssociation(softwarePath, "running", "ran_on", devicePath);
+			createVersion(eid, softwarePath, activeVersion, VersionPurpose::Other);
+			createAssociation(eid, softwarePath, "running", "ran_on", devicePath);
 
 			if (updateManager)
 			{
@@ -44,8 +45,8 @@ void InventoryItemManager::createInventoryItem(
                 updateManager->assignActivation(std::make_shared<Activation>(utils::DBusHandler::getBus(),
                                                                             softwarePath,
                                                                             Activations::Active,updateManager.get()));
-				codeUpdaters.emplace_back(std::make_unique<CodeUpdater>(
-					utils::DBusHandler::getBus(), softwarePath.c_str(), updateManager));
+				codeUpdaterPairs.emplace_back(std::make_pair(eid, std::make_unique<CodeUpdater>(
+					utils::DBusHandler::getBus(), softwarePath.c_str(), updateManager)));
 			}
 		}
 	}
@@ -81,7 +82,8 @@ std::string InventoryItemManager::getVersionId(const std::string& version)
     return mdString;
 }
 
-void InventoryItemManager::createVersion(const std::string& path,
+void InventoryItemManager::createVersion(const eid& eid,
+                                         const std::string& path,
                                          std::string version,
                                          VersionPurpose purpose)
 {
@@ -98,10 +100,11 @@ void InventoryItemManager::createVersion(const std::string& path,
     // activeSoftware->version(version);
     // activeSoftware->purpose(purpose);
     // activeSoftware->emit_object_added();
-    softwareVersions.emplace_back(std::move(activeSoftware));
+    softwareVersionPairs.emplace_back(std::make_pair(eid, std::move(activeSoftware)));
 }
 
-void InventoryItemManager::createAssociation(const std::string& path,
+void InventoryItemManager::createAssociation(const eid& eid,
+                                             const std::string& path,
                                              const std::string& foward,
                                              const std::string& reverse,
                                              const std::string& assocEndPoint)
@@ -110,7 +113,7 @@ void InventoryItemManager::createAssociation(const std::string& path,
         utils::DBusHandler::getBus(), path.c_str());
     association->associations(
         {{foward.c_str(), reverse.c_str(), assocEndPoint.c_str()}});
-    associations.emplace_back(std::move(association));
+    associationPairs.emplace_back(std::make_pair(eid, std::move(association)));
 }
 
 const ObjectPath InventoryItemManager::getBoardPath(const InventoryPath& path)
@@ -145,6 +148,7 @@ const ObjectPath InventoryItemManager::getBoardPath(const InventoryPath& path)
 void InventoryItemManager::refreshInventoryPath(const eid& eid,
                                                 const InventoryPath& path)
 {
+    const std::lock_guard<std::mutex> lock(recordOperator);
     if (inventoryPathMap.contains(eid))
     {
         inventoryPathMap.at(eid) = path;
@@ -153,6 +157,28 @@ void InventoryItemManager::refreshInventoryPath(const eid& eid,
     {
         inventoryPathMap.emplace(eid, path);
     }
+}
+
+void InventoryItemManager::removeInventoryItems(const eid& eidToRemove)
+{
+    const std::lock_guard<std::mutex> lock(recordOperator);
+    inventoryItemPairs.erase(std::remove_if(inventoryItemPairs.begin(),inventoryItemPairs.end(),
+        [eidToRemove](std::pair<eid, std::unique_ptr<InventoryItemBoardIntf>>& pair){
+            return pair.first==eidToRemove;
+        }),inventoryItemPairs.end());
+    softwareVersionPairs.erase(std::remove_if(softwareVersionPairs.begin(),softwareVersionPairs.end(),
+        [eidToRemove](std::pair<eid, std::unique_ptr<Version>>& pair){
+            return pair.first==eidToRemove;
+        }),softwareVersionPairs.end());
+    associationPairs.erase(std::remove_if(associationPairs.begin(),associationPairs.end(),
+        [eidToRemove](std::pair<eid, std::unique_ptr<AssociationDefinitionsIntf>>& pair){
+            return pair.first==eidToRemove;
+        }),associationPairs.end());
+    codeUpdaterPairs.erase(std::remove_if(codeUpdaterPairs.begin(),codeUpdaterPairs.end(),
+        [eidToRemove](std::pair<eid, std::unique_ptr<CodeUpdater>>& pair){
+            return pair.first==eidToRemove;
+        }),codeUpdaterPairs.end());
+    inventoryPathMap.erase(eidToRemove);
 }
 
 } // namespace pldm::fw_update

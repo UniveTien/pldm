@@ -38,6 +38,17 @@ void InventoryManager::discoverFDs(const MctpInfos& mctpInfos)
          }
      }
 }
+
+void InventoryManager::removeFDs(const MctpInfos& removedMctpInfos)
+{
+    for (const auto& mctpInfo : removedMctpInfos)
+    {
+        auto eid = std::get<EID_INDEX>(mctpInfo);
+        info("EID {EID} ejected, removing related interfaces", "EID", eid);
+        inventoryItemManager.removeInventoryItems(eid);
+        aggregateUpdateManager->removeUpdateManagers(eid);
+    }
+}
  
 void InventoryManager::refreshInventoryPath(const MctpInfo& mctpInfo)
 {
@@ -831,7 +842,7 @@ void InventoryManager::getFirmwareParameters(
         event, handler, instanceIdDb, *descriptorMaps.back(), *componentInfoMaps.back(),
         false /* do not watch folder*/);
 
-    aggregateUpdateManager->addUpdateManager(updateManager);
+    aggregateUpdateManager->addUpdateManager(eid, updateManager);
 
     inventoryItemManager.createInventoryItem(
         eid, firmwareDeviceNameMap.at(eid),

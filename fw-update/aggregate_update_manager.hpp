@@ -12,9 +12,17 @@ class AggregateUpdateManager : public UpdateManagerDecorator
         UpdateManagerDecorator(updateManager)
     {}
 
-    void addUpdateManager(const std::shared_ptr<UpdateManagerInf>& updateManager)
+    void addUpdateManager(const eid& eid, const std::shared_ptr<UpdateManagerInf>& updateManager)
     {
-        updateManagers.emplace_back(updateManager);
+        updateManagerPairs.emplace_back(std::make_pair(eid,updateManager));
+    }
+
+    void removeUpdateManagers(const eid& eidToRemove)
+    {
+        updateManagerPairs.erase(std::remove_if(updateManagerPairs.begin(),updateManagerPairs.end(),
+            [eidToRemove](std::pair<eid, std::shared_ptr<UpdateManagerInf>>& obj){
+                return eidToRemove==obj.first;
+            }),updateManagerPairs.end());
     }
 
     Response handleRequest(mctp_eid_t eid, uint8_t command,
@@ -30,7 +38,7 @@ class AggregateUpdateManager : public UpdateManagerDecorator
         }
         else
         {
-            for (auto& manager : updateManagers)
+            for (auto& [_eid, manager] : updateManagerPairs)
             {
                 response = manager->handleRequest(eid, command, request,
                                                  reqMsgLen);
@@ -46,7 +54,7 @@ class AggregateUpdateManager : public UpdateManagerDecorator
     }
 
   private:
-    std::vector<std::shared_ptr<UpdateManagerInf>> updateManagers;
+    std::vector<std::pair<eid, std::shared_ptr<UpdateManagerInf>>> updateManagerPairs;
 };
 
 } // namespace pldm::fw_update

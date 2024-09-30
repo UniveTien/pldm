@@ -84,6 +84,8 @@ class InventoryManager
      */
     void discoverFDs(const MctpInfos& mctpInfos);
 
+    void removeFDs(const MctpInfos& removedMctpInfos);
+
     /** @brief Handler for QueryDeviceIdentifiers command response
      *
      *  The response of the QueryDeviceIdentifiers is processed and firmware

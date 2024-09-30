@@ -42,13 +42,16 @@ class InventoryItemManager
 
     void refreshInventoryPath(const eid& eid, const InventoryPath& path);
 
+    void removeInventoryItems(const eid& eidToRemove);
+
   private:
     std::string getVersionId(const std::string& version);
 
-    void createVersion(const std::string& path, std::string version,
+    void createVersion(const eid& eid, const std::string& path, std::string version,
                        VersionPurpose purpose);
 
-    void createAssociation(const std::string& path, const std::string& foward,
+    void createAssociation(const eid& eid,
+                           const std::string& path, const std::string& foward,
                            const std::string& reverse,
                            const std::string& assocEndPoint);
 
@@ -56,13 +59,15 @@ class InventoryItemManager
 
     std::map<eid, InventoryPath> inventoryPathMap;
 
-    std::vector<std::unique_ptr<InventoryItemBoardIntf>> inventoryItems;
+    std::vector<std::pair<eid, std::unique_ptr<InventoryItemBoardIntf>>> inventoryItemPairs;
 
-    std::vector<std::unique_ptr<Version>> softwareVersions;
+    std::vector<std::pair<eid, std::unique_ptr<Version>>> softwareVersionPairs;
 
-    std::vector<std::unique_ptr<AssociationDefinitionsIntf>> associations;
+    std::vector<std::pair<eid, std::unique_ptr<AssociationDefinitionsIntf>>> associationPairs;
 
-    std::vector<std::unique_ptr<CodeUpdater>> codeUpdaters;
+    std::vector<std::pair<eid, std::unique_ptr<CodeUpdater>>> codeUpdaterPairs;
+
+    std::mutex recordOperator;
 };
 
 } // namespace pldm::fw_update
