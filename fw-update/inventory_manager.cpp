@@ -350,12 +350,17 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
         return;
     }
 
-    DownstreamDevices downstreamDevices{};
+    DownstreamDevices initialDownstreamDevices{};
+    DownstreamDevices* downstreamDevices;
     switch (downstreamIds.transfer_flag)
     {
+        case PLDM_START:
+        case PLDM_START_AND_END:
+            downstreamDevices = &initialDownstreamDevices;
+            break;
         case PLDM_MIDDLE:
         case PLDM_END:
-            downstreamDevices = downstreamDescriptorMap.at(eid);
+            downstreamDevices = &downstreamDescriptorMap.at(eid);
             break;
     }
 
@@ -368,7 +373,7 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
         auto descriptorCount = downstreamDevice->downstream_descriptor_count;
         auto descriptorPtr = downstreamDevicesData.ptr +
                              PLDM_DOWNSTREAM_DEVICE_BYTES;
-
+        info("V: index = {IDX}","IDX",downstreamDeviceIndex);
         Descriptors descriptors{};
         for (uint8_t i = 0; i < descriptorCount; i++)
         {
@@ -378,7 +383,9 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
             rc = decode_descriptor_type_length_value(
                 descriptorPtr, downstreamDevicesData.length, &descriptorType,
                 &descriptorData);
-
+            info("V: dtype = {DTYPE}","DTYPE",descriptorType);
+            std::string ddata((char*)descriptorData.ptr,descriptorData.length);
+            info("V: ddata = {DDATA}", "DDATA",ddata);
             if (rc)
             {
                 error(
@@ -434,7 +441,8 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
 
         downstreamDevicesData.length -= PLDM_DOWNSTREAM_DEVICE_BYTES;
         downstreamDevicesData.ptr = descriptorPtr;
-        downstreamDevices.emplace_back(
+        info("EID = {EID}, IDX = {IDX} emplaced!","EID",eid,"IDX", downstreamDeviceIndex);
+        downstreamDevices->emplace_back(
             DownstreamDeviceInfo{downstreamDeviceIndex, descriptors});
 
         updateDownstreamDeviceName(eid, downstreamDeviceIndex, descriptors);
@@ -443,7 +451,7 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
     switch (downstreamIds.transfer_flag)
     {
         case PLDM_START:
-            downstreamDescriptorMap.emplace(eid, std::move(downstreamDevices));
+            downstreamDescriptorMap.emplace(eid, std::move(initialDownstreamDevices));
             sendQueryDownstreamIdentifiersRequest(
                 eid, downstreamIds.next_data_transfer_handle,
                 PLDM_GET_NEXTPART);
@@ -454,15 +462,17 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
                 PLDM_GET_NEXTPART);
             break;
         case PLDM_START_AND_END:
-            downstreamDescriptorMap.emplace(eid, std::move(downstreamDevices));
+            downstreamDescriptorMap.emplace(eid, std::move(initialDownstreamDevices));
             /** DataTransferHandle will be skipped when TransferOperationFlag is
              *  `GetFirstPart`. Use 0x0 as default by following example in
              *  Figure 9 in DSP0267 1.1.0
              */
+            info("EID = {EID} request emitted once, from START_AND_END","EID",eid);
             sendGetDownstreamFirmwareParametersRequest(eid, 0x0,
                                                        PLDM_GET_FIRSTPART);
             break;
         case PLDM_END:
+            info("EID = {EID} request emitted once, from END","EID",eid);
             sendGetDownstreamFirmwareParametersRequest(eid, 0x0,
                                                        PLDM_GET_FIRSTPART);
             break;
@@ -632,6 +642,7 @@ void InventoryManager::getDownstreamFirmwareParameters(mctp_eid_t eid,
 
     ComponentInfo componentInfo{};
 
+    info("EID = {EID} try once","EID",eid);
     while (downstreamFirmwareParams.downstream_device_count-- &&
            (paramTableLen > 0))
     {
@@ -656,10 +667,42 @@ void InventoryManager::getDownstreamFirmwareParameters(mctp_eid_t eid,
         paramTableLen -= sizeof(pldm_component_parameter_entry) +
                          activeCompVerStr.length + pendingCompVerStr.length;
 
+        std::string activeVer((char*)activeCompVerStr.ptr,activeCompVerStr.length);
+        info("com: {COM} = ver: {VER}","COM",compIdentifier,"VER",activeVer);
+        Descriptors descriptors;
+        auto downstreamDevices = downstreamDescriptorMap.at(eid);
+        auto downstreamDeviceInfoItr = std::find_if(downstreamDevices.begin(),downstreamDevices.end(),
+            [compIdentifier](const DownstreamDeviceInfo& i)
+                {
+                    auto downstreamDeviceIndex = std::get<0>(i);
+                    return downstreamDeviceIndex == compIdentifier;
+                });
+        if(downstreamDeviceInfoItr != downstreamDevices.end())
+        {
+            descriptors = std::get<1>(*downstreamDeviceInfoItr);
+        }
+        else
+        {
+            error(
+                "Failed to find downstream descriptors to create update manager, EID={EID}, IDX={IDX}",
+                "EID", eid, "IDX", compIdentifier);
+            continue;
+        }
+        
+
+        descriptorMaps.emplace_back(std::make_unique<DescriptorMap>(DescriptorMap{{eid, descriptors}}));
+        componentInfoMaps.emplace_back(std::make_unique<ComponentInfoMap>(ComponentInfoMap{{eid, componentInfo}}));
+
+        auto updateManager = std::make_shared<UpdateManager>(
+            event, handler, instanceIdDb, *descriptorMaps.back(), *componentInfoMaps.back(),
+            false /* do not watch folder*/);
+
+        aggregateUpdateManager->addUpdateManager(updateManager);
+
         inventoryItemManager.createInventoryItem(
             eid,
             downstreamDeviceNameMap.at(std::make_tuple(eid, compIdentifier)),
-            utils::toString(activeCompVerStr));
+            utils::toString(activeCompVerStr), updateManager);
     }
 
     switch (downstreamFirmwareParams.transfer_flag)
