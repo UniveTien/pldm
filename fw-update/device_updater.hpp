@@ -52,10 +52,12 @@ class DeviceUpdater
                            const ComponentImageInfos& compImageInfos,
                            const ComponentInfo& compInfo,
                            uint32_t maxTransferSize,
-                           UpdateManager* updateManager) :
+                           UpdateManager* updateManager,
+                           std::optional<size_t> packageSize = std::nullopt) :
         eid(eid), package(package), fwDeviceIDRecord(fwDeviceIDRecord),
         compImageInfos(compImageInfos), compInfo(compInfo),
-        maxTransferSize(maxTransferSize), updateManager(updateManager)
+        maxTransferSize(maxTransferSize), updateManager(updateManager),
+        packageSize(packageSize)
     {}
 
     /** @brief Start the firmware update flow for the FD
@@ -152,6 +154,7 @@ class DeviceUpdater
      */
     void activateFirmware(mctp_eid_t eid, const pldm_msg* response,
                           size_t respMsgLen);
+    uint8_t getDeviceUpdateProgress() const;
 
   private:
     /** @brief Send PassComponentTable command request
@@ -207,6 +210,11 @@ class DeviceUpdater
 
     /** @brief To send a PLDM request after the current command handling */
     std::unique_ptr<sdeventplus::source::Defer> pldmRequest;
+
+    std::optional<size_t> packageSize;
+    uint32_t transferOffset = 0;
+    bool isVarifyComplete = false;
+    bool isApplyComplete = false;
 };
 
 } // namespace fw_update

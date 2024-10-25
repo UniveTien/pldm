@@ -369,7 +369,7 @@ Response DeviceUpdater::requestFwData(const pldm_msg* request,
                                       size_t payloadLength)
 {
     uint8_t completionCode = PLDM_SUCCESS;
-    uint32_t offset = 0;
+    auto& offset = transferOffset;
     uint32_t length = 0;
     Response response(sizeof(pldm_msg_hdr) + sizeof(completionCode), 0);
     auto responseMsg = reinterpret_cast<pldm_msg*>(response.data());
@@ -509,7 +509,15 @@ Response DeviceUpdater::transferComplete(const pldm_msg* request,
             "EID", eid, "RC", rc);
         return response;
     }
-
+    if(packageSize)
+    {
+        transferOffset = packageSize.value();
+    }
+    else
+    {
+        packageSize = transferOffset;
+    }
+    updateManager->updateActivationProgress();
     return response;
 }
 
@@ -568,6 +576,8 @@ Response DeviceUpdater::verifyComplete(const pldm_msg* request,
         return response;
     }
 
+    isVarifyComplete = true;
+    updateManager->updateActivationProgress();
     return response;
 }
 
@@ -610,6 +620,7 @@ Response DeviceUpdater::applyComplete(const pldm_msg* request,
         info(
             "Component endpoint ID '{EID}' with '{COMPONENT_VERSION}' apply complete.",
             "EID", eid, "COMPONENT_VERSION", compVersion);
+        isApplyComplete = true;
         updateManager->updateActivationProgress();
     }
     else
@@ -644,7 +655,6 @@ Response DeviceUpdater::applyComplete(const pldm_msg* request,
             std::bind(&DeviceUpdater::sendUpdateComponentRequest, this,
                       componentIndex));
     }
-
     return response;
 }
 
@@ -713,6 +723,15 @@ void DeviceUpdater::activateFirmware(mctp_eid_t eid, const pldm_msg* response,
     }
 
     updateManager->updateDeviceCompletion(eid, true);
+}
+
+uint8_t DeviceUpdater::getDeviceUpdateProgress() const
+{
+    if(packageSize)
+        return static_cast<uint8_t>((100 * transferOffset / packageSize.value() +
+                                     100 * isVarifyComplete +
+                                     100 * isApplyComplete) / 3);
+    return 0;
 }
 
 } // namespace fw_update

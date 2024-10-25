@@ -170,7 +170,7 @@ int UpdateManager::processIstream(std::istream& stream)
             deviceUpdaterInfo.first,
             std::make_unique<DeviceUpdater>(
                 deviceUpdaterInfo.first, stream, fwDeviceIDRecord,
-                compImageInfos, search->second, MAXIMUM_TRANSFER_SIZE, this));
+                compImageInfos, search->second, MAXIMUM_TRANSFER_SIZE, this, packageSize));
     }
     if(activation)
         activation->activation(software::Activation::Activations::Ready);
@@ -317,9 +317,18 @@ void UpdateManager::clearActivationInfo()
 
 void UpdateManager::updateActivationProgress()
 {
-    compUpdateCompletedCount++;
+    /*compUpdateCompletedCount++;
+
     auto progressPercent = static_cast<uint8_t>(std::floor(
         (100 * compUpdateCompletedCount) / totalNumComponentUpdates));
+    activationProgress->progress(progressPercent);*/
+    auto deviceCount = deviceUpdaterMap.size();
+    uint32_t progressSum = 0;
+    for(auto const& [eid, deviceUpdater] : deviceUpdaterMap)
+    {
+        progressSum += deviceUpdater->getDeviceUpdateProgress();
+    }
+    auto progressPercent = static_cast<uint8_t>(progressSum/deviceCount);
     activationProgress->progress(progressPercent);
 }
 

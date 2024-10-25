@@ -708,7 +708,7 @@ void InventoryManager::getDownstreamFirmwareParameters(mctp_eid_t eid,
             event, handler, instanceIdDb, *descriptorMaps.back(), *componentInfoMaps.back(),
             false /* do not watch folder*/);
 
-        aggregateUpdateManager->addUpdateManager(updateManager);
+        aggregateUpdateManager->addUpdateManager(eid, updateManager);
 
         inventoryItemManager.createInventoryItem(
             eid,
