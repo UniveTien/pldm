@@ -17,43 +17,47 @@ void InventoryItemManager::createInventoryItem(
     const std::string& activeVersion,
     std::shared_ptr<UpdateManager> updateManager)
 {
+    if (!updateManager || deviceName.empty())
+    {
+        error("Invalid inventory item arguments for {EID}, {NAME}", "EID", eid,
+              "NAME", deviceName);
+        return;
+    }
+
     const std::lock_guard<std::mutex> lock(recordOperator);
 	try
 	{
-		if (!inventoryPathMap.at(eid).empty())
-		{
-			const auto boardPath = getBoardPath(inventoryPathMap.at(eid));
-			if (boardPath.empty())
-			{
-				return;
-			}
-			auto devicePath = boardPath + "_" + deviceName;
-			auto inventoryItem = std::make_unique<InventoryItemBoardIntf>(
-				utils::DBusHandler::getBus(), devicePath.c_str());
-			inventoryItemPairs.emplace_back(std::make_pair(eid, std::move(inventoryItem)));
+        const auto boardPath = getBoardPath(inventoryPathMap.at(eid));
+        if (boardPath.empty())
+        {
+            error("Board name on {EID} is empty", "EID", eid);
+            return;
+        }
+        auto devicePath = boardPath + "_" + deviceName;
 
-			const auto softwarePath = "/xyz/openbmc_project/software/" +
-									  devicePath.substr(devicePath.rfind("/") + 1) +
-									  "_" + getVersionId(activeVersion);
+        auto deviceId = DeviceId(eid, deviceName);
+        interfaceHubMap[deviceId] = InterfaceHub();
+        auto& hub = interfaceHubMap[deviceId];
 
-			createVersion(eid, softwarePath, activeVersion, VersionPurpose::Other);
-			createAssociation(eid, softwarePath, "running", "ran_on", devicePath);
-
-			if (updateManager)
-			{
-                updateManager->overrideObjPath(softwarePath);
-                updateManager->assignActivation(std::make_shared<Activation>(utils::DBusHandler::getBus(),
-                                                                            softwarePath,
-                                                                            Activations::Active,updateManager.get()));
-				codeUpdaterPairs.emplace_back(std::make_pair(eid, std::make_unique<CodeUpdater>(
-					utils::DBusHandler::getBus(), softwarePath.c_str(), updateManager)));
-			}
-		}
-	}
+        hub.inventoryItem =
+            std::make_unique<InventoryItemBoardIntf>(bus, devicePath.c_str());
+        const auto softwarePath = "/xyz/openbmc_project/software/" +
+                                  devicePath.substr(devicePath.rfind("/") + 1) +
+                                  "_" + getVersionId(activeVersion);
+        createVersion(hub, softwarePath, activeVersion, VersionPurpose::Other);
+        createAssociation(hub, softwarePath, "running", "ran_on", devicePath);
+        aggregateUpdateManager->addUpdateManager(deviceId, updateManager);
+        updateManager->overrideObjPath(softwarePath);
+        updateManager->assignActivation(std::make_shared<Activation>(
+            bus, softwarePath, Activations::Active, updateManager.get()));
+        hub.codeUpdater = std::make_unique<CodeUpdater>(
+            bus, softwarePath.c_str(), updateManager);
+    }
 	catch(const std::out_of_range& e)
 	{
-		error("Failed to find eid in map, error, EID is {EID} - {ERROR}","EID", unsigned(eid), "ERROR", e.what());
-	}
+        error("Failed to find eid in map, error, EID is {EID} - {ERROR}", "EID",
+              eid, "ERROR", e.what());
+    }
 }
 
 using EVP_MD_CTX_Ptr =
@@ -82,38 +86,27 @@ std::string InventoryItemManager::getVersionId(const std::string& version)
     return mdString;
 }
 
-void InventoryItemManager::createVersion(const eid& eid,
-                                         const std::string& path,
-                                         std::string version,
-                                         VersionPurpose purpose)
+void InventoryItemManager::createVersion(
+    InterfaceHub& hub, const std::string& path, std::string version,
+    VersionPurpose purpose)
 {
     if (version.empty())
     {
         version = "N/A";
     }
 
-    auto activeSoftware = std::make_unique<Version>(
-        utils::DBusHandler::getBus(), path, version, purpose);
-    // auto activeSoftware = std::make_unique<SoftwareVersionIntf>(
-    //     utils::DBusHandler::getBus(), path.c_str(),
-    //     SoftwareVersionIntf::action::defer_emit);
-    // activeSoftware->version(version);
-    // activeSoftware->purpose(purpose);
-    // activeSoftware->emit_object_added();
-    softwareVersionPairs.emplace_back(std::make_pair(eid, std::move(activeSoftware)));
+    hub.version = std::make_unique<Version>(utils::DBusHandler::getBus(), path,
+                                            version, purpose);
 }
 
-void InventoryItemManager::createAssociation(const eid& eid,
-                                             const std::string& path,
-                                             const std::string& foward,
-                                             const std::string& reverse,
-                                             const std::string& assocEndPoint)
+void InventoryItemManager::createAssociation(
+    InterfaceHub& hub, const std::string& path, const std::string& foward,
+    const std::string& reverse, const std::string& assocEndPoint)
 {
-    auto association = std::make_unique<AssociationDefinitionsIntf>(
+    hub.association = std::make_unique<AssociationDefinitionsIntf>(
         utils::DBusHandler::getBus(), path.c_str());
-    association->associations(
+    hub.association->associations(
         {{foward.c_str(), reverse.c_str(), assocEndPoint.c_str()}});
-    associationPairs.emplace_back(std::make_pair(eid, std::move(association)));
 }
 
 const ObjectPath InventoryItemManager::getBoardPath(const InventoryPath& path)
@@ -159,25 +152,20 @@ void InventoryItemManager::refreshInventoryPath(const eid& eid,
     }
 }
 
+void InventoryItemManager::removeInventoryItem(const DeviceId& deviceId)
+{
+    const std::lock_guard<std::mutex> lock(recordOperator);
+    interfaceHubMap.erase(deviceId);
+    aggregateUpdateManager->removeUpdateManager(deviceId);
+}
+
 void InventoryItemManager::removeInventoryItems(const eid& eidToRemove)
 {
     const std::lock_guard<std::mutex> lock(recordOperator);
-    inventoryItemPairs.erase(std::remove_if(inventoryItemPairs.begin(),inventoryItemPairs.end(),
-        [eidToRemove](std::pair<eid, std::unique_ptr<InventoryItemBoardIntf>>& pair){
-            return pair.first==eidToRemove;
-        }),inventoryItemPairs.end());
-    softwareVersionPairs.erase(std::remove_if(softwareVersionPairs.begin(),softwareVersionPairs.end(),
-        [eidToRemove](std::pair<eid, std::unique_ptr<Version>>& pair){
-            return pair.first==eidToRemove;
-        }),softwareVersionPairs.end());
-    associationPairs.erase(std::remove_if(associationPairs.begin(),associationPairs.end(),
-        [eidToRemove](std::pair<eid, std::unique_ptr<AssociationDefinitionsIntf>>& pair){
-            return pair.first==eidToRemove;
-        }),associationPairs.end());
-    codeUpdaterPairs.erase(std::remove_if(codeUpdaterPairs.begin(),codeUpdaterPairs.end(),
-        [eidToRemove](std::pair<eid, std::unique_ptr<CodeUpdater>>& pair){
-            return pair.first==eidToRemove;
-        }),codeUpdaterPairs.end());
+    std::erase_if(interfaceHubMap, [&](const auto& item) {
+        return item.first.first == eidToRemove;
+    });
+    aggregateUpdateManager->removeUpdateManagers(eidToRemove);
     inventoryPathMap.erase(eidToRemove);
 }
 

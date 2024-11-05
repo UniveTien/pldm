@@ -2,18 +2,22 @@
 
 #include "common/instance_id.hpp"
 #include "common/types.hpp"
+#include "condition.hpp"
 #include "device_updater.hpp"
 #include "fw-update/activation.hpp"
+#include "json_condition_collector.hpp"
 #include "package_parser.hpp"
 #include "requester/handler.hpp"
 #include "watch.hpp"
 
 #include <libpldm/base.h>
 
+#include <xyz/openbmc_project/Software/ApplyTime/server.hpp>
+
 #include <chrono>
 #include <filesystem>
-#include <istream>
 #include <fstream>
+#include <istream>
 #include <sstream>
 #include <tuple>
 #include <unordered_map>
@@ -32,6 +36,8 @@ using DeviceIDRecordOffset = size_t;
 using DeviceUpdaterInfo = std::pair<mctp_eid_t, DeviceIDRecordOffset>;
 using DeviceUpdaterInfos = std::vector<DeviceUpdaterInfo>;
 using TotalComponentUpdates = size_t;
+using ApplyTimeIntf =
+    sdbusplus::xyz::openbmc_project::Software::server::ApplyTime;
 
 class UpdateManagerInf
 {
@@ -56,12 +62,15 @@ class UpdateManager : public UpdateManagerInf
         Event& event,
         pldm::requester::Handler<pldm::requester::Request>& handler,
         InstanceIdDb& instanceIdDb, const DescriptorMap& descriptorMap,
-        const ComponentInfoMap& componentInfoMap,
-        const bool watchFolder = true) :
+        const ComponentInfoMap& componentInfoMap, const bool watchFolder = true,
+        std::shared_ptr<ServiceCondition> preCondition = nullptr,
+        std::shared_ptr<ServiceCondition> postCondition = nullptr) :
         event(event),
         handler(handler), instanceIdDb(instanceIdDb),
         descriptorMap(descriptorMap), componentInfoMap(componentInfoMap),
-        totalNumComponentUpdates(0), compUpdateCompletedCount(0)
+        totalNumComponentUpdates(0), compUpdateCompletedCount(0),
+        preCondition(std::move(preCondition)),
+        postCondition(std::move(postCondition))
     {
         if (watchFolder)
         {
@@ -112,6 +121,10 @@ class UpdateManager : public UpdateManagerInf
 
     void clearActivationInfo();
 
+    ApplyTimeIntf::RequestedApplyTimes getApplyTime();
+
+    void setApplyTime(ApplyTimeIntf::RequestedApplyTimes applyTime);
+
     /** @brief
      *
      */
@@ -160,6 +173,12 @@ class UpdateManager : public UpdateManagerInf
     decltype(std::chrono::steady_clock::now()) startTime;
 
     int processIstream(std::istream& stream);
+
+    std::shared_ptr<ServiceCondition> preCondition;
+    std::shared_ptr<ServiceCondition> postCondition;
+
+    ApplyTimeIntf::RequestedApplyTimes applyTime =
+        ApplyTimeIntf::RequestedApplyTimes::OnReset;
 };
 
 } // namespace fw_update

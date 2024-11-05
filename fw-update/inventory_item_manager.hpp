@@ -1,10 +1,10 @@
 #pragma once
 
+#include "activation.hpp"
+#include "aggregate_update_manager.hpp"
 #include "code_updater.hpp"
-#include "update_manager.hpp"
 #include "common/types.hpp"
 #include "version.hpp"
-#include "activation.hpp"
 
 #include <sdbusplus/bus.hpp>
 #include <xyz/openbmc_project/Association/Definitions/server.hpp>
@@ -25,10 +25,21 @@ using Activations =
 
 using ObjectPath = pldm::dbus::ObjectPath;
 
+struct InterfaceHub
+{
+    std::unique_ptr<InventoryItemBoardIntf> inventoryItem = nullptr;
+    std::unique_ptr<Version> version = nullptr;
+    std::unique_ptr<AssociationDefinitionsIntf> association = nullptr;
+    std::unique_ptr<CodeUpdater> codeUpdater = nullptr;
+};
+
 class InventoryItemManager
 {
   public:
-    InventoryItemManager() = default;
+    InventoryItemManager(
+        std::shared_ptr<AggregateUpdateManager> aggregateUpdateManager) :
+        aggregateUpdateManager(aggregateUpdateManager)
+    {}
     InventoryItemManager(const InventoryItemManager&) = delete;
     InventoryItemManager(InventoryItemManager&&) = delete;
     InventoryItemManager& operator=(const InventoryItemManager&) = delete;
@@ -42,30 +53,30 @@ class InventoryItemManager
 
     void refreshInventoryPath(const eid& eid, const InventoryPath& path);
 
+    void removeInventoryItem(const DeviceId& deviceId);
+
     void removeInventoryItems(const eid& eidToRemove);
 
   private:
     std::string getVersionId(const std::string& version);
 
-    void createVersion(const eid& eid, const std::string& path, std::string version,
-                       VersionPurpose purpose);
+    void createVersion(InterfaceHub& hub, const std::string& path,
+                       std::string version, VersionPurpose purpose);
 
-    void createAssociation(const eid& eid,
-                           const std::string& path, const std::string& foward,
+    void createAssociation(InterfaceHub& hub, const std::string& path,
+                           const std::string& foward,
                            const std::string& reverse,
                            const std::string& assocEndPoint);
 
     const ObjectPath getBoardPath(const InventoryPath& path);
 
+    decltype(utils::DBusHandler::getBus()) bus = utils::DBusHandler::getBus();
+
     std::map<eid, InventoryPath> inventoryPathMap;
 
-    std::vector<std::pair<eid, std::unique_ptr<InventoryItemBoardIntf>>> inventoryItemPairs;
+    std::map<DeviceId, InterfaceHub> interfaceHubMap;
 
-    std::vector<std::pair<eid, std::unique_ptr<Version>>> softwareVersionPairs;
-
-    std::vector<std::pair<eid, std::unique_ptr<AssociationDefinitionsIntf>>> associationPairs;
-
-    std::vector<std::pair<eid, std::unique_ptr<CodeUpdater>>> codeUpdaterPairs;
+    std::shared_ptr<AggregateUpdateManager> aggregateUpdateManager;
 
     std::mutex recordOperator;
 };

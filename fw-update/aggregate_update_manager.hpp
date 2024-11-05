@@ -12,17 +12,22 @@ class AggregateUpdateManager : public UpdateManagerDecorator
         UpdateManagerDecorator(updateManager)
     {}
 
-    void addUpdateManager(const eid& eid, const std::shared_ptr<UpdateManagerInf>& updateManager)
+    void addUpdateManager(const DeviceId deviceId,
+                          const std::shared_ptr<UpdateManagerInf> updateManager)
     {
-        updateManagerPairs.emplace_back(std::make_pair(eid,updateManager));
+        updateManagerMap[deviceId] = updateManager;
+    }
+
+    void removeUpdateManager(DeviceId deviceId)
+    {
+        updateManagerMap.erase(deviceId);
     }
 
     void removeUpdateManagers(const eid& eidToRemove)
     {
-        updateManagerPairs.erase(std::remove_if(updateManagerPairs.begin(),updateManagerPairs.end(),
-            [eidToRemove](std::pair<eid, std::shared_ptr<UpdateManagerInf>>& obj){
-                return eidToRemove==obj.first;
-            }),updateManagerPairs.end());
+        std::erase_if(updateManagerMap, [&](const auto& item) {
+            return item.first.first == eidToRemove;
+        });
     }
 
     Response handleRequest(mctp_eid_t eid, uint8_t command,
@@ -38,7 +43,7 @@ class AggregateUpdateManager : public UpdateManagerDecorator
         }
         else
         {
-            for (auto& [_eid, manager] : updateManagerPairs)
+            for (auto& [deviceId, manager] : updateManagerMap)
             {
                 response = manager->handleRequest(eid, command, request,
                                                  reqMsgLen);
@@ -54,7 +59,7 @@ class AggregateUpdateManager : public UpdateManagerDecorator
     }
 
   private:
-    std::vector<std::pair<eid, std::shared_ptr<UpdateManagerInf>>> updateManagerPairs;
+    std::map<DeviceId, std::shared_ptr<UpdateManagerInf>> updateManagerMap;
 };
 
 } // namespace pldm::fw_update

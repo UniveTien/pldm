@@ -451,6 +451,7 @@ Response DeviceUpdater::requestFwData(const pldm_msg* request,
         return response;
     }
 
+    updateManager->updateActivationProgress();
     return response;
 }
 
@@ -728,9 +729,16 @@ void DeviceUpdater::activateFirmware(mctp_eid_t eid, const pldm_msg* response,
 uint8_t DeviceUpdater::getDeviceUpdateProgress() const
 {
     if(packageSize)
-        return static_cast<uint8_t>((100 * transferOffset / packageSize.value() +
-                                     100 * isVarifyComplete +
-                                     100 * isApplyComplete) / 3);
+    {
+        auto ret = static_cast<uint8_t>(
+            (100 * transferOffset / packageSize.value() +
+             100 * isVarifyComplete + 100 * isApplyComplete) /
+            3);
+        info("ret = {RET}, offset = {OFF}, size = {SIZE}", "RET", ret, "OFF",
+             transferOffset, "SIZE", packageSize.value());
+        return ret;
+    }
+    info("NO SIZE :(");
     return 0;
 }
 

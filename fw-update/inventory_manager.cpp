@@ -46,7 +46,6 @@ void InventoryManager::removeFDs(const MctpInfos& removedMctpInfos)
         auto eid = std::get<EID_INDEX>(mctpInfo);
         info("EID {EID} ejected, removing related interfaces", "EID", eid);
         inventoryItemManager.removeInventoryItems(eid);
-        aggregateUpdateManager->removeUpdateManagers(eid);
     }
 }
  
@@ -382,9 +381,8 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
             downstreamDevicesData.ptr);
         auto downstreamDeviceIndex = downstreamDevice->downstream_device_index;
         auto descriptorCount = downstreamDevice->downstream_descriptor_count;
-        auto descriptorPtr = downstreamDevicesData.ptr +
-                             PLDM_DOWNSTREAM_DEVICE_BYTES;
-        info("V: index = {IDX}","IDX",downstreamDeviceIndex);
+        auto descriptorPtr =
+            downstreamDevicesData.ptr + PLDM_DOWNSTREAM_DEVICE_BYTES;
         Descriptors descriptors{};
         for (uint8_t i = 0; i < descriptorCount; i++)
         {
@@ -394,9 +392,7 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
             rc = decode_descriptor_type_length_value(
                 descriptorPtr, downstreamDevicesData.length, &descriptorType,
                 &descriptorData);
-            info("V: dtype = {DTYPE}","DTYPE",descriptorType);
-            std::string ddata((char*)descriptorData.ptr,descriptorData.length);
-            info("V: ddata = {DDATA}", "DDATA",ddata);
+            std::string ddata((char*)descriptorData.ptr, descriptorData.length);
             if (rc)
             {
                 error(
@@ -452,7 +448,6 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
 
         downstreamDevicesData.length -= PLDM_DOWNSTREAM_DEVICE_BYTES;
         downstreamDevicesData.ptr = descriptorPtr;
-        info("EID = {EID}, IDX = {IDX} emplaced!","EID",eid,"IDX", downstreamDeviceIndex);
         downstreamDevices->emplace_back(
             DownstreamDeviceInfo{downstreamDeviceIndex, descriptors});
 
@@ -478,12 +473,10 @@ void InventoryManager::queryDownstreamIdentifiers(mctp_eid_t eid,
              *  `GetFirstPart`. Use 0x0 as default by following example in
              *  Figure 9 in DSP0267 1.1.0
              */
-            info("EID = {EID} request emitted once, from START_AND_END","EID",eid);
             sendGetDownstreamFirmwareParametersRequest(eid, 0x0,
                                                        PLDM_GET_FIRSTPART);
             break;
         case PLDM_END:
-            info("EID = {EID} request emitted once, from END","EID",eid);
             sendGetDownstreamFirmwareParametersRequest(eid, 0x0,
                                                        PLDM_GET_FIRSTPART);
             break;
@@ -653,7 +646,6 @@ void InventoryManager::getDownstreamFirmwareParameters(mctp_eid_t eid,
 
     ComponentInfo componentInfo{};
 
-    info("EID = {EID} try once","EID",eid);
     while (downstreamFirmwareParams.downstream_device_count-- &&
            (paramTableLen > 0))
     {
@@ -678,8 +670,6 @@ void InventoryManager::getDownstreamFirmwareParameters(mctp_eid_t eid,
         paramTableLen -= sizeof(pldm_component_parameter_entry) +
                          activeCompVerStr.length + pendingCompVerStr.length;
 
-        std::string activeVer((char*)activeCompVerStr.ptr,activeCompVerStr.length);
-        info("com: {COM} = ver: {VER}","COM",compIdentifier,"VER",activeVer);
         Descriptors descriptors;
         auto downstreamDevices = downstreamDescriptorMap.at(eid);
         auto downstreamDeviceInfoItr = std::find_if(downstreamDevices.begin(),downstreamDevices.end(),
@@ -702,13 +692,25 @@ void InventoryManager::getDownstreamFirmwareParameters(mctp_eid_t eid,
         
 
         descriptorMaps.emplace_back(std::make_unique<DescriptorMap>(DescriptorMap{{eid, descriptors}}));
-        componentInfoMaps.emplace_back(std::make_unique<ComponentInfoMap>(ComponentInfoMap{{eid, componentInfo}}));
+        componentInfoMaps.emplace_back(std::make_unique<ComponentInfoMap>(
+            ComponentInfoMap{{eid, componentInfo}}));
+
+        auto firmwareDeviceName =
+            downstreamDeviceNameMap[std::make_tuple(eid, compIdentifier)];
+        auto preCondition = std::make_shared<ServiceCondition>(
+            conditionCollector.preCondition(firmwareDeviceName));
+        auto postCondition = std::make_shared<ServiceCondition>(
+            conditionCollector.postCondition(firmwareDeviceName));
+        postCondition->assignRoutine(
+            std::nullopt,
+            std::bind(
+                &InventoryManager::sendGetDownstreamFirmwareParametersRequest,
+                this, eid, 0x0, PLDM_GET_FIRSTPART));
 
         auto updateManager = std::make_shared<UpdateManager>(
-            event, handler, instanceIdDb, *descriptorMaps.back(), *componentInfoMaps.back(),
-            false /* do not watch folder*/);
-
-        aggregateUpdateManager->addUpdateManager(eid, updateManager);
+            event, handler, instanceIdDb, *descriptorMaps.back(),
+            *componentInfoMaps.back(), false /* do not watch folder*/,
+            nullptr /*no pre condition*/, nullptr);
 
         inventoryItemManager.createInventoryItem(
             eid,
@@ -838,15 +840,23 @@ void InventoryManager::getFirmwareParameters(
     descriptorMaps.emplace_back(std::make_unique<DescriptorMap>(DescriptorMap{{eid, descriptorMap.at(eid)}}));
     componentInfoMaps.emplace_back(std::make_unique<ComponentInfoMap>(ComponentInfoMap{{eid, componentInfoMap.at(eid)}}));
 
+    auto firmwareDeviceName = firmwareDeviceNameMap[eid];
+    auto preCondition = std::make_shared<ServiceCondition>(
+        conditionCollector.preCondition(firmwareDeviceName));
+    auto postCondition = std::make_shared<ServiceCondition>(
+        conditionCollector.postCondition(firmwareDeviceName));
+    postCondition->assignRoutine(
+        std::nullopt,
+        std::bind(&InventoryManager::sendGetFirmwareParametersRequest, this,
+                  eid));
     auto updateManager = std::make_shared<UpdateManager>(
-        event, handler, instanceIdDb, *descriptorMaps.back(), *componentInfoMaps.back(),
-        false /* do not watch folder*/);
-
-    aggregateUpdateManager->addUpdateManager(eid, updateManager);
+        event, handler, instanceIdDb, *descriptorMaps.back(),
+        *componentInfoMaps.back(), false /* do not watch folder*/, preCondition,
+        postCondition);
 
     inventoryItemManager.createInventoryItem(
-        eid, firmwareDeviceNameMap.at(eid),
-        utils::toString(activeCompImageSetVerStr), updateManager);
+        eid, firmwareDeviceName, utils::toString(activeCompImageSetVerStr),
+        updateManager);
 }
 
 } // namespace fw_update

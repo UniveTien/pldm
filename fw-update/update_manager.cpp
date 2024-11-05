@@ -166,6 +166,7 @@ int UpdateManager::processIstream(std::istream& stream)
         const auto& fwDeviceIDRecord =
             fwDeviceIDRecords[deviceUpdaterInfo.second];
         auto search = componentInfoMap.find(deviceUpdaterInfo.first);
+        info("package size = {SIZE}", "SIZE", packageSize);
         deviceUpdaterMap.emplace(
             deviceUpdaterInfo.first,
             std::make_unique<DeviceUpdater>(
@@ -245,6 +246,12 @@ void UpdateManager::updateDeviceCompletion(mctp_eid_t eid, bool status)
         info("Firmware update time: {DURATION}ms", "DURATION", dur);
         activation->activation(software::Activation::Activations::Active);
     }
+    if (applyTime == ApplyTimeIntf::RequestedApplyTimes::Immediate &&
+        postCondition)
+    {
+        postCondition->assignArg(objPath);
+        postCondition->execute();
+    }
     return;
 }
 
@@ -295,6 +302,11 @@ Response UpdateManager::handleRequest(mctp_eid_t eid, uint8_t command,
 void UpdateManager::activatePackage()
 {
     startTime = std::chrono::steady_clock::now();
+    if (preCondition)
+    {
+        preCondition->assignArg(objPath);
+        preCondition->execute();
+    }
     for (const auto& [eid, deviceUpdaterPtr] : deviceUpdaterMap)
     {
         deviceUpdaterPtr->startFwUpdateFlow();
@@ -324,12 +336,22 @@ void UpdateManager::updateActivationProgress()
     activationProgress->progress(progressPercent);*/
     auto deviceCount = deviceUpdaterMap.size();
     uint32_t progressSum = 0;
-    for(auto const& [eid, deviceUpdater] : deviceUpdaterMap)
+    for (const auto& [eid, deviceUpdater] : deviceUpdaterMap)
     {
         progressSum += deviceUpdater->getDeviceUpdateProgress();
     }
     auto progressPercent = static_cast<uint8_t>(progressSum/deviceCount);
     activationProgress->progress(progressPercent);
+}
+
+void UpdateManager::setApplyTime(ApplyTimeIntf::RequestedApplyTimes applyTime)
+{
+    this->applyTime = applyTime;
+}
+
+ApplyTimeIntf::RequestedApplyTimes UpdateManager::getApplyTime()
+{
+    return applyTime;
 }
 
 } // namespace fw_update

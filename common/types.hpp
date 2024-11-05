@@ -26,6 +26,8 @@ using DownstreamDeviceIndex = uint16_t;
 using InventoryPath = std::string;
 using FirmwareDeviceName = std::string;
 
+using DeviceId = std::pair<eid, FirmwareDeviceName>;
+
 /** @brief MCTP Endpoint Medium type in string
  *         Reserved for future purpose
  */

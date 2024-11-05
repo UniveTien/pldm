@@ -141,6 +141,13 @@ option(
     description : 'Support for different set of bios attributes for different types of systems'
 )
 
+option(
+    'update_conditions',
+    type: 'feature',
+    value: 'enabled',
+    description: 'update pre- post- conditions'
+)
+
 # PLDM Soft Power off options
 option(
     'softoff',

@@ -14,7 +14,12 @@
 namespace pldm
 {
 
+using physicalAddress = std::pair<uint8_t, uint8_t>;
+using AddressEidBindMap = std::unordered_map<physicalAddress, eid>;
+
 const std::string emptyUUID = "00000000-0000-0000-0000-000000000000";
+
+constexpr const char* MCTPReacterService = "xyz.openbmc_project.MCTPReactor";
 constexpr const char* MCTPService = "xyz.openbmc_project.MCTP";
 constexpr const char* MCTPInterface = "xyz.openbmc_project.MCTP.Endpoint";
 constexpr const char* MCTPPath = "/xyz/openbmc_project/mctp";

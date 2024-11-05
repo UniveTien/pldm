@@ -10,10 +10,11 @@ namespace pldm::fw_update
 
 sdbusplus::message::object_path
     CodeUpdater::startUpdate(sdbusplus::message::unix_fd image,
-                             ApplyTimeIntf::RequestedApplyTimes /*applyTime*/)
+                             ApplyTimeIntf::RequestedApplyTimes applyTime)
 {
     info("Starting update for image {FD}", "FD", static_cast<int>(image));
 
+    updateManager->setApplyTime(applyTime);
     updateManager->processFd(image);
 
     return sdbusplus::message::object_path(objPath);

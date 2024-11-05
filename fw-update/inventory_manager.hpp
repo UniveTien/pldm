@@ -1,16 +1,16 @@
 #pragma once
 
+#include "aggregate_update_manager.hpp"
 #include "common/instance_id.hpp"
 #include "common/types.hpp"
 #include "inventory_item_manager.hpp"
+#include "json_condition_collector.hpp"
 #include "requester/configuration_discovery_handler.hpp"
 #include "requester/handler.hpp"
-#include "aggregate_update_manager.hpp"
- 
+
 #include <xyz/openbmc_project/Association/Definitions/server.hpp>
 #include <xyz/openbmc_project/Inventory/Item/Board/server.hpp>
 #include <xyz/openbmc_project/Software/Version/server.hpp>
-
 
 namespace pldm
 {
@@ -66,12 +66,14 @@ class InventoryManager
         std::shared_ptr<AggregateUpdateManager> aggregateUpdateManager,
         pldm::ConfigurationDiscoveryHandler* configurationDiscovery = nullptr) :
         event(event),
-        handler(handler),
-        instanceIdDb(instanceIdDb), descriptorMap(descriptorMap),
+        handler(handler), instanceIdDb(instanceIdDb),
+        descriptorMap(descriptorMap),
+        inventoryItemManager(aggregateUpdateManager),
         downstreamDescriptorMap(downstreamDescriptorMap),
         componentInfoMap(componentInfoMap),
         aggregateUpdateManager(aggregateUpdateManager),
-        configurationDiscovery(configurationDiscovery)
+        configurationDiscovery(configurationDiscovery),
+        conditionCollector(fs::path(UPDATE_CONDITIONS_DIR) / "yv4.json")
     {}
 
     /** @brief Discover the firmware identifiers and component details of FDs
@@ -138,6 +140,12 @@ class InventoryManager
      */
     void getFirmwareParameters(mctp_eid_t eid, const pldm_msg* response,
                                size_t respMsgLen);
+
+    /** @brief Send GetFirmwareParameters command request
+     *
+     *  @param[in] eid - Remote MCTP endpoint
+     */
+    void sendGetFirmwareParametersRequest(mctp_eid_t eid);
 
   private:
     /** @brief Refresh the inventory path of the FD
@@ -208,13 +216,6 @@ class InventoryManager
         mctp_eid_t eid, uint32_t dataTransferHandle,
         enum transfer_op_flag transferOperationFlag);
 
-
-    /** @brief Send GetFirmwareParameters command request
-     *
-     *  @param[in] eid - Remote MCTP endpoint
-     */
-    void sendGetFirmwareParametersRequest(mctp_eid_t eid);
-
     Event& event;
 
     /** @brief PLDM request handler */
@@ -253,6 +254,8 @@ class InventoryManager
 
     /** @brief Configuration Discovery Handler */
     pldm::ConfigurationDiscoveryHandler* configurationDiscovery;
+
+    JsonConditionCollector conditionCollector;
 };
 
 } // namespace fw_update

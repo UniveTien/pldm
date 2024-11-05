@@ -84,6 +84,12 @@ if get_option('softoff').allowed()
         join_paths(package_datadir, 'softoff'),
     )
 endif
+if get_option('update_conditions').allowed()
+    conf_data.set_quoted(
+        'UPDATE_CONDITIONS_DIR',
+        join_paths(package_datadir, 'update_conditions'),
+    )
+endif
 if get_option('oem-ibm').allowed()
     conf_data.set_quoted(
         'FILE_TABLE_JSON',
